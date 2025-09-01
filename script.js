@@ -83,6 +83,15 @@ themeSwitcher.addEventListener('click', () => {
 // --- CHANGELOG LOGIC ---
 const changelogData = [
     {
+        version: '2.5.2',
+        date: 'September 1, 2025',
+        author: 'Gemini & ༯𝙎ค૯𝙀𝘿✘🫀',
+        changes: [
+            'Upgraded AI model to `gemini-2.5-flash` for potentially faster and better responses. ⚡️',
+            'Implemented an entirely new, buffer-based stream parser on the server to make it highly robust and finally fix the streaming error. 🏆'
+        ]
+    },
+    {
         version: '2.5.1',
         date: 'September 1, 2025',
         author: 'Gemini & ༯𝙎ค૯𝙀𝘿✘🫀',

@@ -20,12 +20,15 @@ export default async function handler(request) {
 
     const apiKey = process.env.GEMINI_API_KEY;
     if (!apiKey) {
+      console.error('GEMINI_API_KEY is not set in environment variables.');
       return new Response(JSON.stringify({ error: 'API key not configured' }), {
         status: 500, headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:streamGenerateContent?key=${apiKey}`;
+    // UPDATED: Using the gemini-2.5-flash model as requested
+    const model = 'gemini-2.5-flash';
+    const geminiApiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${apiKey}`;
 
     const geminiResponse = await fetch(geminiApiUrl, {
       method: 'POST',
@@ -37,38 +40,47 @@ export default async function handler(request) {
 
     if (!geminiResponse.ok || !geminiResponse.body) {
       const errorBody = await geminiResponse.text();
-      console.error('Gemini API Error:', errorBody);
+      console.error('Gemini API Error:', geminiResponse.status, errorBody);
       return new Response(JSON.stringify({ error: 'Failed to fetch from Gemini API', details: errorBody }), {
           status: geminiResponse.status, headers: { 'Content-Type': 'application/json' },
       });
     }
 
-    // A more robust TransformStream to handle the Gemini API's streaming JSON
+    // NEW: A much more robust stream parser that buffers data
+    let buffer = '';
     const textStream = new TransformStream({
-      async transform(chunk, controller) {
-        // The API returns data that might look like "[{...}]" or just "{...},".
-        // This logic handles these cases much more reliably.
-        try {
-            // It's common for the stream to send multiple JSON objects in one chunk,
-            // or split a single object across chunks. We need to handle this.
-            const jsonObjects = chunk.split('}\n,').map((s, i, a) => i < a.length - 1 ? s + '}' : s);
+      transform(chunk, controller) {
+        buffer += chunk;
+        // The stream can contain multiple JSON objects or incomplete ones.
+        // We find complete objects by looking for matching curly braces.
+        let braceCount = 0;
+        let lastCut = 0;
 
-            for (const jsonStr of jsonObjects) {
-                if (jsonStr.trim()) {
-                    // Clean up potential array brackets from the start/end of the stream
-                    const cleanedJsonStr = jsonStr.replace(/^\[|\]$/g, '').trim();
-                    if (cleanedJsonStr) {
-                         const parsed = JSON.parse(cleanedJsonStr);
-                         const text = parsed.candidates[0]?.content?.parts[0]?.text;
-                         if (text) {
-                            controller.enqueue(text); // Send only the text to the client
-                         }
+        for (let i = 0; i < buffer.length; i++) {
+            if (buffer[i] === '{') {
+                braceCount++;
+            } else if (buffer[i] === '}') {
+                braceCount--;
+                if (braceCount === 0 && i > lastCut) {
+                    // We found a complete JSON object string
+                    const jsonStr = buffer.substring(lastCut, i + 1);
+                    lastCut = i + 1;
+                    try {
+                        const parsed = JSON.parse(jsonStr);
+                        const text = parsed.candidates[0]?.content?.parts[0]?.text;
+                        if (text) {
+                            controller.enqueue(text); // Send the text part to the client
+                        }
+                    } catch (e) {
+                        // This can happen if a non-JSON part of the stream is processed.
+                        // console.error("Could not parse JSON object from stream:", jsonStr, e);
                     }
                 }
             }
-        } catch (e) {
-          // This might happen with incomplete JSON chunks, we can safely ignore and wait for the next chunk.
-          // console.error("Error parsing chunk:", e, "Chunk was:", chunk);
+        }
+        // Keep any incomplete part of the buffer for the next chunk
+        if (lastCut > 0) {
+            buffer = buffer.substring(lastCut);
         }
       },
     });
