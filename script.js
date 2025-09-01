@@ -206,6 +206,15 @@ const changelogData = [
     }
 ];
 
+/**
+ * Render the changelog entries into the changelogContent container.
+ *
+ * Clears existing content, creates DOM nodes for each entry in the global
+ * `changelogData` array (version, date, author, list of changes) and appends
+ * them to `changelogContent`. Entries with index >= 10 are given the `hidden`
+ * class so only the first 10 are shown initially. Shows or hides the global
+ * `showMoreButton` based on whether there are more than 10 entries.
+ */
 function renderChangelog() {
     changelogContent.innerHTML = '';
     changelogData.forEach((entry, index) => {
@@ -253,6 +262,17 @@ function loadConversation() {
     }
 }
 
+/**
+ * Send a prompt to the backend chat API, stream the response into the UI in real time,
+ * and persist the final bot message to the conversation history.
+ *
+ * Displays a loading spinner and disables input while streaming. Creates a placeholder
+ * bot message element, appends incoming text chunks as they arrive, updates the last
+ * conversation entry with the complete response, and saves conversation state.
+ * On error, replaces the bot message text with a user-friendly error message.
+ *
+ * @param {string} prompt - The text prompt sent to the backend chat endpoint.
+ */
 async function getGeminiResponse(prompt) {
     loadingSpinner.style.display = 'block';
     setUiState(false);
@@ -332,6 +352,17 @@ function setUiState(enabled) {
     storyButton.disabled = !enabled;
 }
 
+/**
+ * Read the current user input, create a conversational prompt for the character, add the user's message to the chat UI, clear the input, and send the prompt to the backend for a streamed bot response.
+ *
+ * The function trims the input and does nothing if it's empty. When a message is present it:
+ * - appends the user's message to the chat (persisting it via addMessage),
+ * - clears the input field,
+ * - builds a prompt that requests sentiment analysis and a cute character reply in Roman Urdu with poetry and emojis,
+ * - calls and awaits getGeminiResponse(prompt) to stream and render the bot's reply.
+ *
+ * @returns {Promise<void>} Resolves after the backend response handling is initiated and completed.
+ */
 async function handleSend() {
     const message = userInput.value.trim();
     if (!message) return;

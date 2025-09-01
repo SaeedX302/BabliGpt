@@ -5,6 +5,20 @@ export const config = {
   runtime: 'edge',
 };
 
+/**
+ * Vercel Edge function handler that accepts a POST with a JSON { prompt } and streams plain text responses from the Gemini streaming API.
+ *
+ * The function:
+ * - Validates that the request method is POST and that the JSON body contains `prompt`.
+ * - Reads the GEMINI_API_KEY from environment variables and forwards the prompt to Gemini's streamGenerateContent endpoint.
+ * - Streams text extracted from Gemini's streaming JSON chunks to the client as `text/plain; charset=utf-8`. Only the first candidate text (parsed from `candidates[0].content.parts[0].text`) is forwarded; incomplete or non-parsable chunk fragments are ignored to allow the stream to continue.
+ * - Returns JSON error responses with appropriate HTTP status codes for method/validation/API-key issues or when Gemini responds with an error. Internal errors are logged and returned as 500.
+ *
+ * @param {Request} request - Incoming HTTP request. Must be a POST with JSON body containing a `prompt` string.
+ * @returns {Response} A Response that is either:
+ *   - a streaming `text/plain` response that emits the model's text as it arrives, or
+ *   - a JSON error response with status 400, 405, 500, or Gemini's returned status on upstream failures.
+ */
 export default async function handler(request) {
   // 1. Only allow POST requests
   if (request.method !== 'POST') {
